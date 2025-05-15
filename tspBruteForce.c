@@ -1,17 +1,16 @@
 #include <stdio.h>
 #include <limits.h>
-#include <math.h> // For sqrt and pow
-#include <stdlib.h> // For dynamic memory allocation
-#include <string.h> // For file operations
-#include <stdbool.h> // For boolean type
-#include <assert.h> // For debugging with assertions
-#include <time.h> // For measuring time
+#include <math.h>
+#include <stdlib.h>
+#include <string.h> 
+#include <stdbool.h>
+#include <assert.h> 
+#include <time.h> 
 
-int* minPath; // Dynamically allocate based on the number of cities
+int* minPath;
 int minCost = INT_MAX;
-int pathCount = 0; // Global variable to count the number of paths tried
+int pathCount = 0; 
 
-// Dynamically allocate distance matrix
 int** allocateDistanceMatrix(int n) {
     int** matrix = (int**)malloc(n * sizeof(int*));
     for (int i = 0; i < n; i++) {
@@ -20,7 +19,6 @@ int** allocateDistanceMatrix(int n) {
     return matrix;
 }
 
-// Free dynamically allocated distance matrix
 void freeDistanceMatrix(int** matrix, int n) {
     for (int i = 0; i < n; i++) {
         free(matrix[i]);
@@ -28,64 +26,57 @@ void freeDistanceMatrix(int** matrix, int n) {
     free(matrix);
 }
 
-// Calculate cost of the full route (includes return to start)
 int calculateCost(int* route, int** distanceMatrix, int n) {
     int cost = 0;
     for (int i = 0; i < n - 1; i++) {
-        assert(route[i] >= 0 && route[i] < n); // Ensure valid indices
+        assert(route[i] >= 0 && route[i] < n);
         assert(route[i + 1] >= 0 && route[i + 1] < n);
         cost += distanceMatrix[route[i]][route[i + 1]];
     }
     assert(route[n - 1] >= 0 && route[n - 1] < n);
     assert(route[0] >= 0 && route[0] < n);
-    cost += distanceMatrix[route[n - 1]][route[0]]; // return to starting city
+    cost += distanceMatrix[route[n - 1]][route[0]]; 
     return cost;
 }
 
-// Print the current path
 void printPath(int* route, int n, int cost) {
     for (int i = 0; i < n; i++) {
         printf("%d -> ", route[i]);
     }
-    printf("%d | Cost: %d\n", route[0], cost); // Close the loop
+    printf("%d | Cost: %d\n", route[0], cost);
 }
 
-// Tries all permutations starting from index `start`
+
 void tryAllRoutes(int* route, int** distanceMatrix, int start, int n) {
     if (start == n - 1) {
-        pathCount++; // Increment path count
+        pathCount++; 
         int cost = calculateCost(route, distanceMatrix, n);
-        printPath(route, n, cost); // Print the current path
+        printPath(route, n, cost); 
         if (cost < minCost) {
             minCost = cost;
             memcpy(minPath, route, sizeof(int) * n);
-            minPath[n] = route[0]; // close the loop
+            minPath[n] = route[0];
         }
         return;
     }
 
     for (int i = start; i < n; i++) {
-        // Swap
         int temp = route[start];
         route[start] = route[i];
         route[i] = temp;
 
         tryAllRoutes(route, distanceMatrix, start + 1, n);
 
-        // Backtrack
         temp = route[start];
         route[start] = route[i];
         route[i] = temp;
     }
 }
 
-
-// Function to calculate Euclidean distance between two cities
 double calculateDistance(int x1, int y1, int x2, int y2) {
     return sqrt(pow(x2 - x1, 2) + pow(y2 - y1, 2));
 }
 
-// Dynamically calculate the distance matrix based on coordinates
 void generateDistanceMatrix(int coordinates[][2], int n, int** distanceMatrix) {
     for (int i = 0; i < n; i++) {
         for (int j = 0; j < n; j++) {
@@ -98,7 +89,6 @@ void generateDistanceMatrix(int coordinates[][2], int n, int** distanceMatrix) {
     }
 }
 
-// Save the result to a file
 void saveResultToFile(const char* fileName, int coordinates[][2], int* bestPath, int n) {
     FILE* file = fopen(fileName, "w");
     if (file == NULL) {
@@ -135,19 +125,16 @@ int main(int argc, char *argv[]) {
     }
     fclose(file);
 
-    // Dynamically allocate the distance matrix
     int** distanceMatrix = allocateDistanceMatrix(n);
 
-    // Dynamically allocate the minPath array
     minPath = (int*)malloc((n + 1) * sizeof(int));
 
-    // Generate the distance matrix
     generateDistanceMatrix(coordinates, n, distanceMatrix);
 
     int cities[n];
     for (int i = 0; i < n; i++) cities[i] = i;
 
-    tryAllRoutes(cities, distanceMatrix, 0, n);
+    tryAllRoutes(cities, distanceMatrix, 2, n);
     
     printf("Minimum Cost: %d\n", minCost);
     printf("Best Route: ");
@@ -157,13 +144,10 @@ int main(int argc, char *argv[]) {
     }
     printf("\n");
 
-    // Print the number of paths tried
     printf("Number of paths tried: %d\n", pathCount);
 
-    // Save the result to a file
     saveResultToFile("result.txt", coordinates, minPath, n);
 
-    // Free the dynamically allocated distance matrix and minPath array
     freeDistanceMatrix(distanceMatrix, n);
     free(minPath);
 
