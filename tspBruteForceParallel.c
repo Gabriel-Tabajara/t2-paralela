@@ -10,12 +10,28 @@
 // gcc tspBruteForce.c -o tspBruteForce -lm && ./tspBruteForce coordinates8.txt
 #include "mpi.h"
 
-#define TAREFAS 7
+// #define TAREFAS 7
+
+int RESULT_TAG = 0;
+int REQUEST_TAG = 1;
+int KILL_TAG = 2;
+int WORK_TAG = 3;
+
+int coordinates[][2] = {
+    {10, 20},
+    {12, 24},
+    {21, 46},
+    {33, 18},
+    {49, 31},
+    {50, 95},
+    {62, 22},
+    {73, 10}
+};
 
 int *minPath;
 int minCost = INT_MAX;
 int pathCount = 0;
-int qnt_restante = TAREFAS;
+// int qnt_restante = TAREFAS;
 
 int **allocateDistanceMatrix(int n)
 {
@@ -131,56 +147,54 @@ void saveResultToFile(const char *fileName, int coordinates[][2], int *bestPath,
     fclose(file);
 }
 
-int calc(int[][] coorditanes[][2], int n, int[] mipath)
-{
-}
-
 // mpirun -np 2 ./tspBruteForceParallel
 int main(int argc, char *argv[])
 {
+    int n = sizeof(coordinates) / sizeof(coordinates[0]); // Number of coordinates
+
     int my_rank;       // Identificador deste processo
     int proc_n;        // Numero de processos disparados pelo usuário na linha de comando (np)
     int message;       // Buffer para as mensagens
-    int saco[TAREFAS]; // saco de trabalho
+    int saco[n]; // saco de trabalho
 
     MPI_Init(&argc, &argv); // funcao que inicializa o MPI, todo o codigo paralelo estah abaixo
 
     MPI_Comm_rank(MPI_COMM_WORLD, &my_rank); // pega pega o numero do processo atual (rank)
     MPI_Comm_size(MPI_COMM_WORLD, &proc_n);  // pega informacao do numero de processos (quantidade total)
 
+    int **distanceMatrix = allocateDistanceMatrix(n);
+
+    minPath = (int *)malloc((n + 1) * sizeof(int));
+
+    generateDistanceMatrix(coordinates, n, distanceMatrix);
+
     if (my_rank == 0)
     {
         printf("Number of processes: %d\n", proc_n);
 
-        if (argc < 2)
-        {
-            printf("Usage: %s <file_name>\n", argv[0]);
-            return 1;
-        }
+        // if (argc < 2)
+        // {
+        //     printf("Usage: %s <file_name>\n", argv[0]);
+        //     return 1;
+        // }
 
-        const char *file_name = argv[1];
-        FILE *file = fopen(file_name, "r");
-        if (file == NULL)
-        {
-            printf("Error: Could not open file %s\n", file_name);
-            return 1;
-        }
+        // const char *file_name = argv[1];
+        // FILE *file = fopen(file_name, "r");
+        // if (file == NULL)
+        // {
+        //     printf("Error: Could not open file %s\n", file_name);
+        //     return 1;
+        // }
 
-        int n;
-        fscanf(file, "%d", &n);
-        int coordinates[n][2];
-        for (int i = 0; i < n; i++)
-        {
-            fscanf(file, "%d %d", &coordinates[i][0], &coordinates[i][1]);
-        }
-        fclose(file);
-
-        int **distanceMatrix = allocateDistanceMatrix(n);
-
-        minPath = (int *)malloc((n + 1) * sizeof(int));
-
-        generateDistanceMatrix(coordinates, n, distanceMatrix);
-
+        // fscanf(file, "%d", &n);
+        // int coordinates[n][2];
+        // for (int i = 0; i < n; i++)
+        // {
+            // fscanf(file, "%d %d", &coordinates[i][0], &coordinates[i][1]);
+        // }
+        // fclose(file);
+        printf("Process %d started\n", my_rank);
+        
         int cities[n];
         for (int i = 0; i < n; i++)
             cities[i] = i;
@@ -190,26 +204,59 @@ int main(int argc, char *argv[])
             saco[i] = cities[i];
         }
 
+        int currentPos = 1;
+        int qnt_restante = n - 1; // quantidade de tarefas restantes
+
         while (qnt_restante > 0)
         {
-            int[n] message = ;
-            for 
+            int *message = (int *)malloc(n * sizeof(int));
+            message[0] = 0;
+            message[1] = currentPos;
+            for (int i = 0; i < n; i++)
+            {
+                if (i != currentPos)
+                {
+                    message[i] = i;
+                }
+            }
+            currentPos++;
 
-            MPI_Recv(&message, MPI_ANY_SOURCE, MPI_ANY_TAG, status);  // recebo por ordem de chegada com any_source
-            // tryAllRoutes(saco, distanceMatrix, 2, n);
+            MPI_Status status;
+            MPI_Recv(0, 0, MPI_INT, MPI_ANY_SOURCE, REQUEST_TAG, MPI_COMM_WORLD, &status);  // recebo por ordem de chegada com any_source
+
+            int sender_rank = status.MPI_SOURCE; // pego o rank do processo que enviou a mensagem
+
+            printf("Process %d received message from %d \n", my_rank, sender_rank);
+
+            MPI_Send(&message, n, MPI_INT, sender_rank, WORK_TAG, MPI_COMM_WORLD);   
+
             qnt_restante--;
+            free(message);
         }
 
-        MPI_Send(&message, 1, MPI_INT, my_rank+1, 1, MPI_COMM_WORLD);   
         return 0;
     }
     else
     {
-
-        MPI_Recv(&message, 1, MPI_INT, my_rank-1, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
-        
-        tryAllRoutes(cities, distanceMatrix, 2, n);
         printf("Process %d started\n", my_rank);
+
+        MPI_Send(0, 0, MPI_INT, 0, REQUEST_TAG, MPI_COMM_WORLD);   
+
+        int *message = (int *)malloc(n * sizeof(int));
+        
+        MPI_Status status;
+        MPI_Recv(message, n, MPI_INT, 0, WORK_TAG, MPI_COMM_WORLD, &status);  // recebo por ordem de chegada com any_source
+
+        printf("Process %d received message from %d", my_rank, status.MPI_SOURCE);
+
+        for (int i = 0; i < n; i++)
+        {
+            printf("%d ", message[i]);
+        }
+
+        printf("\n");
+
+        // tryAllRoutes(cities, distanceMatrix, 2, n);
         return 0;
     }
 
