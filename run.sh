@@ -1,0 +1,1 @@
+mpicc tspBruteForceParallel.c -o tspBruteForceParallel -lm && mpirun -np 4 ./tspBruteForceParallel 
