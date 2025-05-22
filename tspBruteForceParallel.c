@@ -247,12 +247,14 @@ int main(int argc, char *argv[])
             }
             printf("\n");
             MPI_Send(message, n, MPI_INT, sender_rank, WORK_TAG, MPI_COMM_WORLD);   
-
             qnt_restante--;
             free(message);
         }
 
-        return 0;
+        for (int i = 1; i < proc_n; i++)
+        {
+            MPI_Send(0, 0, MPI_INT, i, KILL_TAG, MPI_COMM_WORLD);
+        }
     }
     else
     {
@@ -264,7 +266,14 @@ int main(int argc, char *argv[])
             int *message = (int *)malloc(n * sizeof(int));
             
             MPI_Status status;
-            MPI_Recv(message, n, MPI_INT, 0, WORK_TAG, MPI_COMM_WORLD, &status);  // recebo por ordem de chegada com any_source
+            MPI_Recv(message, n, MPI_INT, 0, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+
+            if (status.MPI_TAG == KILL_TAG)
+            {
+                free(message);
+                printf("Process %d finished\n", my_rank);
+                break;
+            }
     
             printf("Process %d received message from %d message: ", my_rank, status.MPI_SOURCE);
     
@@ -290,26 +299,27 @@ int main(int argc, char *argv[])
             tryAllRoutes(cities, distanceMatrix, 0, n-2, baseRoute);
         }
         
-        return 0;
+        // printf("Minimum Cost: %d\n", minCost);
+        // printf("Best Route: ");
+        // for (int i = 0; i <= n; i++)
+        // {
+        //     printf("%d ", minPath[i]);
+        //     if (i < n)
+        //         printf("-> ");
+        // }
+        // printf("\n");
+    
+        // printf("Number of paths tried: %d\n", pathCount);
+    
+        // saveResultToFile("result.txt", coordinates, minPath, n);
+    
+        // freeDistanceMatrix(distanceMatrix, n);
+        // free(minPath);
     }
 
 
-    printf("Minimum Cost: %d\n", minCost);
-    printf("Best Route: ");
-    for (int i = 0; i <= n; i++)
-    {
-        printf("%d ", minPath[i]);
-        if (i < n)
-            printf("-> ");
-    }
-    printf("\n");
 
-    printf("Number of paths tried: %d\n", pathCount);
-
-    saveResultToFile("result.txt", coordinates, minPath, n);
-
-    freeDistanceMatrix(distanceMatrix, n);
-    free(minPath);
+    MPI_Finalize();
 
     return 0;
 }
