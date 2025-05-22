@@ -23,9 +23,9 @@ int coordinates[][2] = {
     {21, 46},
     {33, 18},
     {49, 31},
-    {50, 95},
-    {62, 22},
-    {73, 10}
+    // {50, 95},
+    // {62, 22},
+    // {73, 10}
 };
 
 int *minPath;
@@ -52,37 +52,52 @@ void freeDistanceMatrix(int **matrix, int n)
     free(matrix);
 }
 
-int calculateCost(int *route, int **distanceMatrix, int n)
+int calculateCost(int *route, int **distanceMatrix, int n, int *baseRoute)
 {
     int cost = 0;
+    int completeRoute[n + 2];
+    completeRoute[0] = baseRoute[0];
+    completeRoute[1] = baseRoute[1];
+    for (int i = 2; i < n; i++)
+    {
+        completeRoute[i] = route[i-2];
+    }
     for (int i = 0; i < n - 1; i++)
     {
-        assert(route[i] >= 0 && route[i] < n);
-        assert(route[i + 1] >= 0 && route[i + 1] < n);
-        cost += distanceMatrix[route[i]][route[i + 1]];
+        assert(completeRoute[i] >= 0 && completeRoute[i] < n);
+        assert(completeRoute[i + 1] >= 0 && completeRoute[i + 1] < n);
+        cost += distanceMatrix[completeRoute[i]][completeRoute[i + 1]];
     }
-    assert(route[n - 1] >= 0 && route[n - 1] < n);
-    assert(route[0] >= 0 && route[0] < n);
-    cost += distanceMatrix[route[n - 1]][route[0]];
+    assert(completeRoute[n - 1] >= 0 && completeRoute[n - 1] < n);
+    assert(completeRoute[0] >= 0 && completeRoute[0] < n+2);
+    cost += distanceMatrix[completeRoute[n - 1]][completeRoute[0]];
     return cost;
 }
 
-void printPath(int *route, int n, int cost)
+void printPath(int *route, int n, int cost, int* baseRoute)
 {
+    int completeRoute[n + 2];
+    completeRoute[0] = baseRoute[0];
+    completeRoute[1] = baseRoute[1];
+    for (int i = 2; i < n; i++)
+    {
+        completeRoute[i] = route[i-2];
+    }
+
     for (int i = 0; i < n; i++)
     {
-        printf("%d -> ", route[i]);
+        printf("%d -> ", completeRoute[i]);
     }
-    printf("%d | Cost: %d\n", route[0], cost);
+    printf("%d | Cost: %d\n", completeRoute[0], cost);
 }
 
-void tryAllRoutes(int *route, int **distanceMatrix, int start, int n)
+void tryAllRoutes(int *route, int **distanceMatrix, int start, int n, int *baseRoute)
 {
     if (start == n - 1)
     {
         pathCount++;
-        int cost = calculateCost(route, distanceMatrix, n);
-        printPath(route, n, cost);
+        int cost = calculateCost(route, distanceMatrix, n+2, baseRoute);
+        printPath(route, n+2, cost, baseRoute);
         if (cost < minCost)
         {
             minCost = cost;
@@ -98,7 +113,7 @@ void tryAllRoutes(int *route, int **distanceMatrix, int start, int n)
         route[start] = route[i];
         route[i] = temp;
 
-        tryAllRoutes(route, distanceMatrix, start + 1, n);
+        tryAllRoutes(route, distanceMatrix, start + 1, n, baseRoute);
 
         temp = route[start];
         route[start] = route[i];
@@ -224,9 +239,14 @@ int main(int argc, char *argv[])
 
             int sender_rank = status.MPI_SOURCE; // pego o rank do processo que enviou a mensagem
 
-            printf("Process %d received message from %d \n", my_rank, sender_rank);
-
-            MPI_Send(&message, n, MPI_INT, sender_rank, WORK_TAG, MPI_COMM_WORLD);   
+            printf("Master received message from %d and send: ", sender_rank);
+                
+            for (int i = 0; i < n; i++)
+            {
+                printf("%d ", message[i]);
+            }
+            printf("\n");
+            MPI_Send(message, n, MPI_INT, sender_rank, WORK_TAG, MPI_COMM_WORLD);   
 
             qnt_restante--;
             free(message);
@@ -237,24 +257,39 @@ int main(int argc, char *argv[])
     else
     {
         printf("Process %d started\n", my_rank);
-
-        MPI_Send(0, 0, MPI_INT, 0, REQUEST_TAG, MPI_COMM_WORLD);   
-
-        int *message = (int *)malloc(n * sizeof(int));
-        
-        MPI_Status status;
-        MPI_Recv(message, n, MPI_INT, 0, WORK_TAG, MPI_COMM_WORLD, &status);  // recebo por ordem de chegada com any_source
-
-        printf("Process %d received message from %d", my_rank, status.MPI_SOURCE);
-
-        for (int i = 0; i < n; i++)
+        while (true)
         {
-            printf("%d ", message[i]);
+            MPI_Send(0, 0, MPI_INT, 0, REQUEST_TAG, MPI_COMM_WORLD);   
+    
+            int *message = (int *)malloc(n * sizeof(int));
+            
+            MPI_Status status;
+            MPI_Recv(message, n, MPI_INT, 0, WORK_TAG, MPI_COMM_WORLD, &status);  // recebo por ordem de chegada com any_source
+    
+            printf("Process %d received message from %d message: ", my_rank, status.MPI_SOURCE);
+    
+            for (int i = 0; i < n; i++)
+            {
+                printf("%d ", message[i]);
+            }
+    
+            printf("\n");
+    
+            int cities[n];
+            for (int i = 2; i < n; i++)
+                cities[i-2] = message[i];
+    
+            for (int i = 0; i < n - 2; i++)
+            {
+                printf("%d ", cities[i]);
+            }
+    
+            printf("\n");
+            
+            int baseRoute[2] = {message[0], message[1]};
+            tryAllRoutes(cities, distanceMatrix, 0, n-2, baseRoute);
         }
-
-        printf("\n");
-
-        // tryAllRoutes(cities, distanceMatrix, 2, n);
+        
         return 0;
     }
 
