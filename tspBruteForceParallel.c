@@ -212,12 +212,10 @@ int main(int argc, char *argv[])
             int *message = (int *)malloc(n * sizeof(int));
             message[0] = 0;
             message[1] = currentPos;
-            for (int i = 0; i < n; i++)
+            for (int i = 2, j = 1; i < n; i++,j++)
             {
-                if (i != currentPos)
-                {
-                    message[i] = i;
-                }
+                if (j == currentPos) j++;
+                message[i] = j;
             }
             currentPos++;
 
