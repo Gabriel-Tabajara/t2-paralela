@@ -6,11 +6,7 @@
 #include <stdbool.h>
 #include <assert.h>
 #include <time.h>
-// sudo apt-get install libopenmpi-dev
-// gcc tspBruteForce.c -o tspBruteForce -lm && ./tspBruteForce coordinates8.txt
 #include "mpi.h"
-
-// #define TAREFAS 7
 
 int RESULT_TAG = 0;
 int REQUEST_TAG = 1;
@@ -18,20 +14,24 @@ int KILL_TAG = 2;
 int WORK_TAG = 3;
 
 int coordinates[][2] = {
-    {10, 20},
-    {12, 24},
-    {21, 46},
-    {33, 18},
-    {49, 31},
-    // {50, 95},
-    // {62, 22},
-    // {73, 10}
+    {10, 5},
+    {29, 24},
+    {21, 33},
+    {33, 95},
+    {49, 18},
+    {50, 2},
+    {62, 22},
+    {73, 86},
+    {29, 68},
+    {99, 33},
+    {9,20},
+    {12,98},
+    {15, 68}
 };
 
 int *minPath;
 int minCost = INT_MAX;
 int pathCount = 0;
-// int qnt_restante = TAREFAS;
 
 int **allocateDistanceMatrix(int n)
 {
@@ -52,16 +52,23 @@ void freeDistanceMatrix(int **matrix, int n)
     free(matrix);
 }
 
-int calculateCost(int *route, int **distanceMatrix, int n, int *baseRoute)
+int *mergeCompleteRoute(int *route, int n, int *baseRoute)
 {
-    int cost = 0;
-    int completeRoute[n + 2];
+    int *completeRoute = (int *)malloc((n + 2) * sizeof(int));
     completeRoute[0] = baseRoute[0];
     completeRoute[1] = baseRoute[1];
     for (int i = 2; i < n; i++)
     {
-        completeRoute[i] = route[i-2];
+        completeRoute[i] = route[i - 2];
     }
+    return completeRoute;
+}
+
+int calculateCost(int *route, int **distanceMatrix, int n, int *baseRoute)
+{
+    int *completeRoute = mergeCompleteRoute(route, n, baseRoute);
+    int cost = 0;
+
     for (int i = 0; i < n - 1; i++)
     {
         assert(completeRoute[i] >= 0 && completeRoute[i] < n);
@@ -71,24 +78,22 @@ int calculateCost(int *route, int **distanceMatrix, int n, int *baseRoute)
     assert(completeRoute[n - 1] >= 0 && completeRoute[n - 1] < n);
     assert(completeRoute[0] >= 0 && completeRoute[0] < n+2);
     cost += distanceMatrix[completeRoute[n - 1]][completeRoute[0]];
+
+    free(completeRoute);
     return cost;
 }
 
-void printPath(int *route, int n, int cost, int* baseRoute)
+void printPath(int *route, int n, int cost, int *baseRoute)
 {
-    int completeRoute[n + 2];
-    completeRoute[0] = baseRoute[0];
-    completeRoute[1] = baseRoute[1];
-    for (int i = 2; i < n; i++)
-    {
-        completeRoute[i] = route[i-2];
-    }
+    int *completeRoute = mergeCompleteRoute(route, n, baseRoute);
 
-    for (int i = 0; i < n; i++)
-    {
-        printf("%d -> ", completeRoute[i]);
-    }
-    printf("%d | Cost: %d\n", completeRoute[0], cost);
+    // for (int i = 0; i < n; i++)
+    // {
+        //printf("%d -> ", completeRoute[i]);
+    // }
+    //printf("%d | Cost: %d\n", completeRoute[0], cost);
+
+    free(completeRoute);
 }
 
 void tryAllRoutes(int *route, int **distanceMatrix, int start, int n, int *baseRoute)
@@ -96,13 +101,17 @@ void tryAllRoutes(int *route, int **distanceMatrix, int start, int n, int *baseR
     if (start == n - 1)
     {
         pathCount++;
-        int cost = calculateCost(route, distanceMatrix, n+2, baseRoute);
-        printPath(route, n+2, cost, baseRoute);
+        int cost = calculateCost(route, distanceMatrix, n + 2, baseRoute);
+        printPath(route, n + 2, cost, baseRoute);
         if (cost < minCost)
         {
+            int *completeRoute = mergeCompleteRoute(route, n+2, baseRoute);
+
+            memcpy(minPath, completeRoute, sizeof(int) * (n+2));
+            minPath[n+2] = completeRoute[0];
+
             minCost = cost;
-            memcpy(minPath, route, sizeof(int) * n);
-            minPath[n] = route[0];
+            free(completeRoute);
         }
         return;
     }
@@ -162,20 +171,19 @@ void saveResultToFile(const char *fileName, int coordinates[][2], int *bestPath,
     fclose(file);
 }
 
-// mpirun -np 2 ./tspBruteForceParallel
 int main(int argc, char *argv[])
 {
-    int n = sizeof(coordinates) / sizeof(coordinates[0]); // Number of coordinates
+    int n = sizeof(coordinates) / sizeof(coordinates[0]);
 
-    int my_rank;       // Identificador deste processo
-    int proc_n;        // Numero de processos disparados pelo usuário na linha de comando (np)
-    int message;       // Buffer para as mensagens
-    int saco[n]; // saco de trabalho
+    int my_rank;
+    int proc_n;
+    int message;
+    int saco[n];
 
-    MPI_Init(&argc, &argv); // funcao que inicializa o MPI, todo o codigo paralelo estah abaixo
+    MPI_Init(&argc, &argv);
 
-    MPI_Comm_rank(MPI_COMM_WORLD, &my_rank); // pega pega o numero do processo atual (rank)
-    MPI_Comm_size(MPI_COMM_WORLD, &proc_n);  // pega informacao do numero de processos (quantidade total)
+    MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
+    MPI_Comm_size(MPI_COMM_WORLD, &proc_n);
 
     int **distanceMatrix = allocateDistanceMatrix(n);
 
@@ -183,32 +191,11 @@ int main(int argc, char *argv[])
 
     generateDistanceMatrix(coordinates, n, distanceMatrix);
 
+    //printf("Number of processes: %d\n", proc_n);
     if (my_rank == 0)
     {
-        printf("Number of processes: %d\n", proc_n);
 
-        // if (argc < 2)
-        // {
-        //     printf("Usage: %s <file_name>\n", argv[0]);
-        //     return 1;
-        // }
-
-        // const char *file_name = argv[1];
-        // FILE *file = fopen(file_name, "r");
-        // if (file == NULL)
-        // {
-        //     printf("Error: Could not open file %s\n", file_name);
-        //     return 1;
-        // }
-
-        // fscanf(file, "%d", &n);
-        // int coordinates[n][2];
-        // for (int i = 0; i < n; i++)
-        // {
-            // fscanf(file, "%d %d", &coordinates[i][0], &coordinates[i][1]);
-        // }
-        // fclose(file);
-        printf("Process %d started\n", my_rank);
+        printf("Master has started\n");
         
         int cities[n];
         for (int i = 0; i < n; i++)
@@ -220,7 +207,7 @@ int main(int argc, char *argv[])
         }
 
         int currentPos = 1;
-        int qnt_restante = n - 1; // quantidade de tarefas restantes
+        int qnt_restante = n - 1;
 
         while (qnt_restante > 0)
         {
@@ -235,17 +222,17 @@ int main(int argc, char *argv[])
             currentPos++;
 
             MPI_Status status;
-            MPI_Recv(0, 0, MPI_INT, MPI_ANY_SOURCE, REQUEST_TAG, MPI_COMM_WORLD, &status);  // recebo por ordem de chegada com any_source
+            MPI_Recv(0, 0, MPI_INT, MPI_ANY_SOURCE, REQUEST_TAG, MPI_COMM_WORLD, &status);  
 
-            int sender_rank = status.MPI_SOURCE; // pego o rank do processo que enviou a mensagem
-
-            printf("Master received message from %d and send: ", sender_rank);
+            int sender_rank = status.MPI_SOURCE; 
+            
+            //printf("Master received message from %d and send: ", sender_rank);
                 
-            for (int i = 0; i < n; i++)
-            {
-                printf("%d ", message[i]);
-            }
-            printf("\n");
+            // for (int i = 0; i < n; i++)
+            // {
+                //printf("%d ", message[i]);
+            // }
+            //printf("\n");
             MPI_Send(message, n, MPI_INT, sender_rank, WORK_TAG, MPI_COMM_WORLD);   
             qnt_restante--;
             free(message);
@@ -255,6 +242,36 @@ int main(int argc, char *argv[])
         {
             MPI_Send(0, 0, MPI_INT, i, KILL_TAG, MPI_COMM_WORLD);
         }
+
+        for (int i = 1; i < proc_n; i++)
+        {
+            int *resultMessage = (int *)malloc((n + 1) * sizeof(int));
+
+            MPI_Status status;
+            MPI_Recv(resultMessage, n+1, MPI_INT, MPI_ANY_SOURCE, RESULT_TAG, MPI_COMM_WORLD, &status);
+            //printf("Master received result from %d \n", status.MPI_SOURCE);
+
+            int cost = resultMessage[n];
+            if (cost < minCost)
+            {
+                minCost = cost;
+                memcpy(minPath, resultMessage, sizeof(int) * n);
+            }
+            free(resultMessage);
+        }
+
+        printf("Master Best Route with min cost %d: ", minCost);
+        for (int i = 0; i <= n; i++)
+        {
+            printf("%d ", minPath[i]);
+            if (i < n)
+                printf("-> ");
+        }
+        printf("\n");
+
+        saveResultToFile("result.txt", coordinates, minPath, n);
+
+        printf("Master finished\n");
     }
     else
     {
@@ -270,54 +287,52 @@ int main(int argc, char *argv[])
 
             if (status.MPI_TAG == KILL_TAG)
             {
+                int *finalMessage = (int *)malloc((n + 1)* sizeof(int));
+
+                memcpy(finalMessage, minPath, sizeof(int) * (n + 1));
+                finalMessage[n] = minCost;
+
+                MPI_Send(finalMessage, n+1, MPI_INT, 0, RESULT_TAG, MPI_COMM_WORLD);
+
                 free(message);
+                free(finalMessage);
                 printf("Process %d finished\n", my_rank);
                 break;
             }
     
-            printf("Process %d received message from %d message: ", my_rank, status.MPI_SOURCE);
+            //printf("Process %d received message from %d message: ", my_rank, status.MPI_SOURCE);
     
-            for (int i = 0; i < n; i++)
-            {
-                printf("%d ", message[i]);
-            }
+            // for (int i = 0; i < n; i++)
+            // {
+                //printf("%d ", message[i]);
+            // }
     
-            printf("\n");
+            //printf("\n");
     
             int cities[n];
             for (int i = 2; i < n; i++)
                 cities[i-2] = message[i];
     
-            for (int i = 0; i < n - 2; i++)
-            {
-                printf("%d ", cities[i]);
-            }
+            // for (int i = 0; i < n - 2; i++)
+            // {
+                //printf("%d ", cities[i]);
+            // }
     
-            printf("\n");
+            //printf("\n");
             
             int baseRoute[2] = {message[0], message[1]};
             tryAllRoutes(cities, distanceMatrix, 0, n-2, baseRoute);
         }
         
-        // printf("Minimum Cost: %d\n", minCost);
-        // printf("Best Route: ");
+        //printf("Process %d Best Route with min cost %d: ", my_rank, minCost);
         // for (int i = 0; i <= n; i++)
         // {
-        //     printf("%d ", minPath[i]);
-        //     if (i < n)
-        //         printf("-> ");
+            //printf("%d ", minPath[i]);
+            // if (i < n)
+                //printf("-> ");
         // }
-        // printf("\n");
-    
-        // printf("Number of paths tried: %d\n", pathCount);
-    
-        // saveResultToFile("result.txt", coordinates, minPath, n);
-    
-        // freeDistanceMatrix(distanceMatrix, n);
-        // free(minPath);
+        //printf("\n");
     }
-
-
 
     MPI_Finalize();
 

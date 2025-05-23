@@ -12,10 +12,6 @@ def plot_graph(coordinates):
     plt.figure(figsize=(8, 6))
     plt.plot(x, y, marker='o', linestyle='-', color='b', label='Path')
 
-    # Annotate each point with its index
-    for i, (xi, yi) in enumerate(coordinates):
-        plt.text(xi, yi, f'{i}', fontsize=9, ha='right')
-
     plt.title('Best Path Graph')
     plt.xlabel('X Coordinate')
     plt.ylabel('Y Coordinate')
