@@ -13,7 +13,7 @@ int REQUEST_TAG = 1;
 int KILL_TAG = 2;
 int WORK_TAG = 3;
 
-int coordinates[][2] = {
+int __coordinates[][2] = {
     {10, 5},
     {29, 24},
     {21, 33},
@@ -26,7 +26,24 @@ int coordinates[][2] = {
     {99, 33},
     {9,20},
     {12,98},
-    {15, 68}
+    {15, 68},
+    {18, 45},
+    {20, 10},
+    {25, 30},
+    {30, 50},
+    {35, 70},
+    {40, 90},
+    {45, 15},
+    {50, 25},
+    {55, 35},
+    {60, 45},
+    {65, 55},
+    {70, 65},
+    {75, 75},
+    {80, 85},
+    {85, 95},
+    {90, 5},
+    {95, 15}
 };
 
 int *minPath;
@@ -173,6 +190,17 @@ void saveResultToFile(const char *fileName, int coordinates[][2], int *bestPath,
 
 int main(int argc, char *argv[])
 {
+    int CITIES = argc > 1 ? atoi(argv[1]) : 10;
+
+    int coordinates[CITIES][2];
+
+    for (int i = 0; i < CITIES; i++)
+    {
+        coordinates[i][0] = __coordinates[i][0];
+        coordinates[i][1] = __coordinates[i][1];
+    }
+
+
     int n = sizeof(coordinates) / sizeof(coordinates[0]);
 
     int my_rank;
@@ -278,6 +306,7 @@ int main(int argc, char *argv[])
         printf("Process %d started\n", my_rank);
         while (true)
         {
+            printf("Process %d asking for work\n", my_rank);
             MPI_Send(0, 0, MPI_INT, 0, REQUEST_TAG, MPI_COMM_WORLD);   
     
             int *message = (int *)malloc(n * sizeof(int));
