@@ -71,15 +71,17 @@ void freeDistanceMatrix(int **matrix, int n)
 
 int *mergeCompleteRoute(int *route, int n, int *baseRoute)
 {
-    int *completeRoute = (int *)malloc((n + 2) * sizeof(int));
+    int *completeRoute = (int *)malloc((n) * sizeof(int)); // n já inclui as 3 fixas
     completeRoute[0] = baseRoute[0];
     completeRoute[1] = baseRoute[1];
-    for (int i = 2; i < n; i++)
+    completeRoute[2] = baseRoute[2];
+    for (int i = 3; i < n; i++)
     {
-        completeRoute[i] = route[i - 2];
+        completeRoute[i] = route[i - 3];
     }
     return completeRoute;
 }
+
 
 int calculateCost(int *route, int **distanceMatrix, int n, int *baseRoute)
 {
@@ -92,40 +94,41 @@ int calculateCost(int *route, int **distanceMatrix, int n, int *baseRoute)
         assert(completeRoute[i + 1] >= 0 && completeRoute[i + 1] < n);
         cost += distanceMatrix[completeRoute[i]][completeRoute[i + 1]];
     }
+
     assert(completeRoute[n - 1] >= 0 && completeRoute[n - 1] < n);
-    assert(completeRoute[0] >= 0 && completeRoute[0] < n+2);
     cost += distanceMatrix[completeRoute[n - 1]][completeRoute[0]];
 
     free(completeRoute);
     return cost;
 }
 
+
 void printPath(int *route, int n, int cost, int *baseRoute)
 {
     int *completeRoute = mergeCompleteRoute(route, n, baseRoute);
 
-    // for (int i = 0; i < n; i++)
-    // {
-        //printf("%d -> ", completeRoute[i]);
-    // }
-    //printf("%d | Cost: %d\n", completeRoute[0], cost);
+    for (int i = 0; i < n; i++)
+    {
+        printf("%d -> ", completeRoute[i]);
+    }
+    printf("%d | Cost: %d\n", completeRoute[0], cost);
 
     free(completeRoute);
 }
 
 void tryAllRoutes(int *route, int **distanceMatrix, int start, int n, int *baseRoute)
 {
-    if (start == n - 1)
+    if (start == n-1)
     {
         pathCount++;
-        int cost = calculateCost(route, distanceMatrix, n + 2, baseRoute);
-        printPath(route, n + 2, cost, baseRoute);
+        int cost = calculateCost(route, distanceMatrix, n + 3, baseRoute);
+        // printPath(route, n + 3, cost, baseRoute);
         if (cost < minCost)
         {
-            int *completeRoute = mergeCompleteRoute(route, n+2, baseRoute);
+            int *completeRoute = mergeCompleteRoute(route, n+3, baseRoute);
 
-            memcpy(minPath, completeRoute, sizeof(int) * (n+2));
-            minPath[n+2] = completeRoute[0];
+            memcpy(minPath, completeRoute, sizeof(int) * (n+3));
+            minPath[n+3] = completeRoute[0];
 
             minCost = cost;
             free(completeRoute);
@@ -215,7 +218,7 @@ int main(int argc, char *argv[])
 
     int **distanceMatrix = allocateDistanceMatrix(n);
 
-    minPath = (int *)malloc((n + 1) * sizeof(int));
+    minPath = (int *)malloc((n + 3) * sizeof(int));
 
     generateDistanceMatrix(coordinates, n, distanceMatrix);
 
@@ -234,37 +237,47 @@ int main(int argc, char *argv[])
             saco[i] = cities[i];
         }
 
-        int currentPos = 1;
+        // int currentPos = 1;
         int qnt_restante = n - 1;
 
-        while (qnt_restante > 0)
+        int totalCombinations = (n - 1) * (n - 2); // combinações de i != j com i,j ≠ 0
+        int currentPos = 0;
+
+        while (currentPos < totalCombinations)
         {
             int *message = (int *)malloc(n * sizeof(int));
             message[0] = 0;
-            message[1] = currentPos;
-            for (int i = 2, j = 1; i < n; i++,j++)
-            {
-                if (j == currentPos) j++;
-                message[i] = j;
+
+            int i = (currentPos / (n - 2)) + 1;
+            int j = (currentPos % (n - 2)) + 1;
+            if (j >= i) j++;  // pular quando j == i
+
+            if (j >= n) {
+                currentPos++;
+                free(message);
+                continue;
             }
-            currentPos++;
 
+            message[1] = i;
+            message[2] = j;
+
+            int idx = 3;
+            for (int k = 1; k < n; k++) {
+                if (k != i && k != j)
+                    message[idx++] = k;
+            }
+
+            // Espera worker pedir trabalho
             MPI_Status status;
-            MPI_Recv(0, 0, MPI_INT, MPI_ANY_SOURCE, REQUEST_TAG, MPI_COMM_WORLD, &status);  
+            MPI_Recv(0, 0, MPI_INT, MPI_ANY_SOURCE, REQUEST_TAG, MPI_COMM_WORLD, &status);
 
-            int sender_rank = status.MPI_SOURCE; 
-            
-            //printf("Master received message from %d and send: ", sender_rank);
-                
-            // for (int i = 0; i < n; i++)
-            // {
-                //printf("%d ", message[i]);
-            // }
-            //printf("\n");
-            MPI_Send(message, n, MPI_INT, sender_rank, WORK_TAG, MPI_COMM_WORLD);   
-            qnt_restante--;
+            int sender_rank = status.MPI_SOURCE;
+            MPI_Send(message, n, MPI_INT, sender_rank, WORK_TAG, MPI_COMM_WORLD);
+
             free(message);
+            currentPos++;
         }
+
 
         for (int i = 1; i < proc_n; i++)
         {
@@ -297,7 +310,7 @@ int main(int argc, char *argv[])
         }
         printf("\n");
 
-        saveResultToFile("result.txt", coordinates, minPath, n);
+        // saveResultToFile("result.txt", coordinates, minPath, n);
 
         printf("Master finished\n");
     }
@@ -339,18 +352,11 @@ int main(int argc, char *argv[])
             //printf("\n");
     
             int cities[n];
-            for (int i = 2; i < n; i++)
-                cities[i-2] = message[i];
-    
-            // for (int i = 0; i < n - 2; i++)
-            // {
-                //printf("%d ", cities[i]);
-            // }
-    
-            //printf("\n");
-            
-            int baseRoute[2] = {message[0], message[1]};
-            tryAllRoutes(cities, distanceMatrix, 0, n-2, baseRoute);
+            for (int i = 3; i < n; i++)
+                cities[i - 3] = message[i];
+
+            int baseRoute[3] = {message[0], message[1], message[2]};
+            tryAllRoutes(cities, distanceMatrix, 0, n - 3, baseRoute);
         }
         
         //printf("Process %d Best Route with min cost %d: ", my_rank, minCost);
